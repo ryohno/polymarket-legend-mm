@@ -75,7 +75,10 @@ export class StrategyLoop {
         const quote = computeYesQuote({
           market,
           snapshot,
-          params: this.config.quoteParams,
+          params: {
+            ...this.config.quoteParams,
+            walletTierOffset: wallet.index, // wallet 0 tightest, wallet 7 widest
+          },
         })
         if (!quote) continue
 

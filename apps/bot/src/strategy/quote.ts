@@ -15,6 +15,12 @@ export interface QuoteParams {
   orderSizeUsd: number
   /** Fallback mid if the book is empty (e.g. fair odds = 1/8 = 0.125) */
   fallbackMid: number
+  /**
+   * Extra tick offset this wallet adds to its spread (wallet tier).
+   * Wallet 0 quotes at the tightest level; wallet N quotes N ticks wider.
+   * Creates real book depth across wallets instead of 8x size at 1 level.
+   */
+  walletTierOffset?: number
 }
 
 export interface Quote {
@@ -57,8 +63,9 @@ export function computeYesQuote(params: {
   // Clamp mid to valid range
   mid = Math.max(tick * 2, Math.min(1 - tick * 2, mid))
 
-  const bidPrice = snapPriceDown(mid - tick * p.spreadTicks, tick)
-  const askPrice = snapPriceUp(mid + tick * p.spreadTicks, tick)
+  const tierOffset = tick * (p.walletTierOffset ?? 0)
+  const bidPrice = snapPriceDown(mid - tick * p.spreadTicks - tierOffset, tick)
+  const askPrice = snapPriceUp(mid + tick * p.spreadTicks + tierOffset, tick)
 
   // Refuse to quote if the result is crossed or equals mid-exactly
   if (parseFloat(bidPrice) >= parseFloat(askPrice)) return null

@@ -12,8 +12,11 @@ import { UserDataWs } from './poly/ws-user.js'
 import { TickSizeCache } from './poly/tick.js'
 import { InventoryTracker } from './strategy/inventory.js'
 import { StrategyLoop } from './strategy/loop.js'
+import { UserEventHandler } from './strategy/user-events.js'
 import { Heartbeat } from './heartbeat.js'
 import { RiskMonitor } from './risk.js'
+import { BalancePoller } from './balance-poller.js'
+import { getPublicClient } from './poly/public-client.js'
 import { LEGEND_TRADE_SERIES_MARKETS } from '@polymm/shared'
 
 async function main(): Promise<void> {
@@ -91,6 +94,7 @@ async function main(): Promise<void> {
   })
 
   // --- User channels (one per wallet) ---
+  const userEventHandler = new UserEventHandler(db, inventory, LEGEND_TRADE_SERIES_MARKETS)
   const conditionIds = LEGEND_TRADE_SERIES_MARKETS.map((m) => m.conditionId)
   const userWsClients: UserDataWs[] = []
   for (const w of wallets) {
@@ -100,17 +104,26 @@ async function main(): Promise<void> {
     }
     const userWs = new UserDataWs(w.address, w.clobClient.creds, conditionIds)
     userWs.onEvent((event) => {
-      db.logEvent({
-        kind: 'INFO',
-        walletAddress: event.walletAddress,
-        message: `user-ws ${event.kind}`,
-        payload: event.raw,
-      })
-      // TODO Phase 3.1: apply fill events to inventory
+      try {
+        userEventHandler.handle(event)
+      } catch (err) {
+        logger.error({ err, wallet: event.walletAddress }, 'user event handler failed')
+        db.logEvent({
+          kind: 'ERROR',
+          level: 'error',
+          walletAddress: event.walletAddress,
+          message: `user event handler: ${(err as Error).message}`,
+        })
+      }
     })
     userWs.connect()
     userWsClients.push(userWs)
   }
+
+  // --- Periodic balance poller ---
+  const publicClient = getPublicClient(env.POLYGON_RPC_URL)
+  const balancePoller = new BalancePoller(publicClient, wallets, db, contracts, 15_000)
+  balancePoller.start()
 
   // --- Heartbeats ---
   const heartbeats: Heartbeat[] = []
@@ -144,6 +157,7 @@ async function main(): Promise<void> {
   const riskMonitor = new RiskMonitor(db, 500, async (reason) => {
     logger.warn({ reason }, 'risk: shutting down strategy')
     loop.stop()
+    balancePoller.stop()
     if (isLive) {
       for (const w of wallets) {
         try {
@@ -181,6 +195,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'bot: shutting down')
     db.logEvent({ kind: 'SHUTDOWN', message: `signal=${signal}` })
     loop.stop()
+    balancePoller.stop()
     riskMonitor.stop()
     if (isLive) {
       for (const w of wallets) {
