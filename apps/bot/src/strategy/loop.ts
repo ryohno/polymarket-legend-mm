@@ -75,13 +75,21 @@ export class StrategyLoop {
   }
 
   private async runTick(): Promise<void> {
+    // Collect all (wallet, market, quote) intents for this tick using a single
+    // snapshot per market. Then apply BUYs first and SELLs second in two passes,
+    // so the STP check on a SELL never sees stale BUY prices from previous ticks.
+    interface Intent {
+      wallet: BotWallet
+      market: MarketDef
+      quote: ReturnType<typeof computeYesQuote>
+    }
+    const intents: Intent[] = []
+
     for (const market of this.markets) {
       const snapshot = this.marketWs.getSnapshot(market.yesTokenId)
       if (!snapshot) continue
-
       for (const wallet of this.wallets) {
         if (this.config.canaryOnly != null && wallet.index !== this.config.canaryOnly) continue
-
         const quote = computeYesQuote({
           market,
           snapshot,
@@ -91,22 +99,34 @@ export class StrategyLoop {
           },
         })
         if (!quote) continue
-
-        await this.maybePlaceSide({
-          wallet,
-          market,
-          side: 'BUY',
-          price: quote.bidPrice,
-          sizeUsd: quote.bidSizeUsd,
-        })
-        await this.maybePlaceSide({
-          wallet,
-          market,
-          side: 'SELL',
-          price: quote.askPrice,
-          sizeShares: quote.askSizeShares,
-        })
+        intents.push({ wallet, market, quote })
       }
+    }
+
+    // Pass 1 — upsert every BUY first. After this pass, every wallet's BUY
+    // row in the DB reflects the current tick, so the next pass's SELL STP
+    // check cannot be misled by stale BUYs from a previous tick.
+    for (const { wallet, market, quote } of intents) {
+      if (!quote) continue
+      await this.maybePlaceSide({
+        wallet,
+        market,
+        side: 'BUY',
+        price: quote.bidPrice,
+        sizeUsd: quote.bidSizeUsd,
+      })
+    }
+
+    // Pass 2 — now attempt every SELL.
+    for (const { wallet, market, quote } of intents) {
+      if (!quote) continue
+      await this.maybePlaceSide({
+        wallet,
+        market,
+        side: 'SELL',
+        price: quote.askPrice,
+        sizeShares: quote.askSizeShares,
+      })
     }
   }
 
