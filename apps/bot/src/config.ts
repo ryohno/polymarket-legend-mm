@@ -4,10 +4,12 @@
  */
 
 import { config as loadDotenv } from 'dotenv'
+import { resolve } from 'node:path'
 import { z } from 'zod'
-import { loadContractConfig } from '@polymm/shared'
+import { loadContractConfig, ensureCwdAtRoot } from '@polymm/shared'
 
-loadDotenv()
+const root = ensureCwdAtRoot()
+loadDotenv({ path: resolve(root, '.env') })
 
 const EnvSchema = z.object({
   POLYGON_RPC_URL: z.string().url(),

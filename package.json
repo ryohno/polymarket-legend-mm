@@ -8,12 +8,12 @@
     "dashboard": "pnpm --filter @polymm/dashboard dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "treasury:generate": "pnpm --filter @polymm/scripts tsx src/generate-treasury.ts",
-    "wallets:generate": "pnpm --filter @polymm/scripts tsx src/generate-wallets.ts",
-    "wallets:fund": "pnpm --filter @polymm/scripts tsx src/fund-wallets.ts",
-    "wallets:approve": "pnpm --filter @polymm/scripts tsx src/grant-approvals.ts",
-    "wallets:sweep": "pnpm --filter @polymm/scripts tsx src/sweep.ts",
-    "status": "pnpm --filter @polymm/scripts tsx src/status.ts"
+    "treasury:generate": "pnpm --filter @polymm/scripts run treasury:generate",
+    "wallets:generate": "pnpm --filter @polymm/scripts run wallets:generate",
+    "wallets:fund": "pnpm --filter @polymm/scripts run wallets:fund",
+    "wallets:approve": "pnpm --filter @polymm/scripts run wallets:approve",
+    "wallets:sweep": "pnpm --filter @polymm/scripts run wallets:sweep",
+    "status": "pnpm --filter @polymm/scripts run status"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

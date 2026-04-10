@@ -35,8 +35,14 @@ interface RawBookMessage {
 
 interface RawPriceChange {
   event_type: 'price_change'
-  asset_id: string
-  changes: Array<{ price: string; side: BookSide; size: string }>
+  market: string
+  price_changes: Array<{
+    asset_id: string
+    price: string
+    side: BookSide
+    size: string
+    hash?: string
+  }>
   timestamp: string
 }
 
@@ -57,7 +63,12 @@ interface RawTickSizeChange {
   timestamp: string
 }
 
-type RawMessage = RawBookMessage | RawPriceChange | RawLastTrade | RawTickSizeChange
+type RawMessage =
+  | RawBookMessage
+  | RawPriceChange
+  | RawLastTrade
+  | RawTickSizeChange
+  | { event_type: string; [k: string]: unknown }
 
 export type OrderBookChangeListener = (snapshot: OrderBookSnapshot) => void
 
@@ -155,45 +166,55 @@ export class MarketDataWs {
   private handleMessage(msg: RawMessage): void {
     switch (msg.event_type) {
       case 'book': {
-        const book: InternalBook = {
-          bids: new Map(msg.bids.map((b) => [b.price, parseFloat(b.size)])),
-          asks: new Map(msg.asks.map((a) => [a.price, parseFloat(a.size)])),
-          lastTrade: this.books.get(msg.asset_id)?.lastTrade ?? null,
+        const book = msg as RawBookMessage
+        const internal: InternalBook = {
+          bids: new Map(book.bids.map((b) => [b.price, parseFloat(b.size)])),
+          asks: new Map(book.asks.map((a) => [a.price, parseFloat(a.size)])),
+          lastTrade: this.books.get(book.asset_id)?.lastTrade ?? null,
         }
-        this.books.set(msg.asset_id, book)
-        this.emit(msg.asset_id)
+        this.books.set(book.asset_id, internal)
+        this.emit(book.asset_id)
         break
       }
       case 'price_change': {
-        const book = this.books.get(msg.asset_id) ?? {
-          bids: new Map<string, number>(),
-          asks: new Map<string, number>(),
-          lastTrade: null,
-        }
-        for (const change of msg.changes) {
+        const pc = msg as RawPriceChange
+        // price_changes can affect multiple tokenIds in one message
+        const touched = new Set<string>()
+        for (const change of pc.price_changes ?? []) {
+          const book = this.books.get(change.asset_id) ?? {
+            bids: new Map<string, number>(),
+            asks: new Map<string, number>(),
+            lastTrade: null,
+          }
           const sizeNum = parseFloat(change.size)
           const target = change.side === 'bid' ? book.bids : book.asks
           if (sizeNum === 0) target.delete(change.price)
           else target.set(change.price, sizeNum)
+          this.books.set(change.asset_id, book)
+          touched.add(change.asset_id)
         }
-        this.books.set(msg.asset_id, book)
-        this.emit(msg.asset_id)
+        for (const tokenId of touched) this.emit(tokenId)
         break
       }
       case 'last_trade_price': {
-        const book = this.books.get(msg.asset_id)
+        const lt = msg as RawLastTrade
+        const book = this.books.get(lt.asset_id)
         if (book) {
-          book.lastTrade = parseFloat(msg.price)
-          this.emit(msg.asset_id)
+          book.lastTrade = parseFloat(lt.price)
+          this.emit(lt.asset_id)
         }
         break
       }
       case 'tick_size_change': {
-        const newTick = parseFloat(msg.new_tick_size)
-        this.tickCache.applyWsUpdate(msg.asset_id, newTick)
-        logger.info({ tokenId: msg.asset_id, newTick }, 'market-ws: tick size changed')
+        const ts = msg as RawTickSizeChange
+        const newTick = parseFloat(ts.new_tick_size)
+        this.tickCache.applyWsUpdate(ts.asset_id, newTick)
+        logger.info({ tokenId: ts.asset_id, newTick }, 'market-ws: tick size changed')
         break
       }
+      default:
+        // Unknown event type — log once at debug level
+        break
     }
   }
 

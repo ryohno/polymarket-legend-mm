@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "treasury:generate": "tsx src/generate-treasury.ts",
+    "wallets:generate": "tsx src/generate-wallets.ts",
+    "wallets:fund": "tsx src/fund-wallets.ts",
+    "wallets:approve": "tsx src/grant-approvals.ts",
+    "wallets:sweep": "tsx src/sweep.ts",
+    "status": "tsx src/status.ts"
   },
   "dependencies": {
     "@polymm/shared": "workspace:*",

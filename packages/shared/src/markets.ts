@@ -15,7 +15,7 @@
  * - Joey and "Other" are inactive (manualActivation); the bot only quotes the 8 live markets.
  */
 
-import type { MarketDef } from './types.js'
+import type { MarketDef } from './types'
 
 export const LEGEND_TRADE_SERIES_EVENT = {
   slug: 'who-will-win-the-legend-trade-series',

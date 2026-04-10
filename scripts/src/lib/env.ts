@@ -4,9 +4,14 @@
  */
 
 import { config as loadDotenv } from 'dotenv'
+import { resolve } from 'node:path'
 import { z } from 'zod'
+import { ensureCwdAtRoot } from '@polymm/shared'
 
-loadDotenv()
+// Chdir to workspace root so all data/*, .env paths resolve consistently
+// regardless of where pnpm --filter launched us from.
+const root = ensureCwdAtRoot()
+loadDotenv({ path: resolve(root, '.env') })
 
 const ScriptEnvSchema = z.object({
   POLYGON_RPC_URL: z.string().url(),

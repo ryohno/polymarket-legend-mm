@@ -4,15 +4,23 @@
  */
 
 import Database from 'better-sqlite3'
-import { DB_PATH_DEFAULT } from '@polymm/shared'
+import { DB_PATH_DEFAULT, findWorkspaceRoot } from '@polymm/shared'
 import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 let db: Database.Database | null = null
 
+function dbPath(): string {
+  // Dashboard runs from apps/dashboard/; resolve DB path relative to workspace root.
+  const root = findWorkspaceRoot()
+  return root ? resolve(root, DB_PATH_DEFAULT) : DB_PATH_DEFAULT
+}
+
 export function getDb(): Database.Database | null {
   if (db) return db
-  if (!existsSync(DB_PATH_DEFAULT)) return null
-  db = new Database(DB_PATH_DEFAULT, { readonly: true, fileMustExist: true })
+  const path = dbPath()
+  if (!existsSync(path)) return null
+  db = new Database(path, { readonly: true, fileMustExist: true })
   return db
 }
 
