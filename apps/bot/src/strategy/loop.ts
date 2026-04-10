@@ -24,12 +24,14 @@ import { logger } from '../log.js'
 export interface LoopConfig {
   dryRun: boolean
   canaryOnly: number | null
+  staggerWallets: boolean
   quoteParams: QuoteParams
 }
 
 export class StrategyLoop {
   private running = false
   private pending = false
+  private ticking = false
   private timer: NodeJS.Timeout | null = null
 
   constructor(
@@ -63,8 +65,16 @@ export class StrategyLoop {
   }
 
   async tick(): Promise<void> {
-    if (!this.running) return
+    if (!this.running || this.ticking) return
+    this.ticking = true
+    try {
+      await this.runTick()
+    } finally {
+      this.ticking = false
+    }
+  }
 
+  private async runTick(): Promise<void> {
     for (const market of this.markets) {
       const snapshot = this.marketWs.getSnapshot(market.yesTokenId)
       if (!snapshot) continue
@@ -77,7 +87,7 @@ export class StrategyLoop {
           snapshot,
           params: {
             ...this.config.quoteParams,
-            walletTierOffset: wallet.index, // wallet 0 tightest, wallet 7 widest
+            walletTierOffset: this.config.staggerWallets ? wallet.index : 0,
           },
         })
         if (!quote) continue

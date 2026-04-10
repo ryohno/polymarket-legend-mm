@@ -17,6 +17,7 @@ import { Heartbeat } from './heartbeat.js'
 import { RiskMonitor } from './risk.js'
 import { BalancePoller } from './balance-poller.js'
 import { getPublicClient } from './poly/public-client.js'
+import { Tui } from './tui.js'
 import { LEGEND_TRADE_SERIES_MARKETS } from '@polymm/shared'
 
 async function main(): Promise<void> {
@@ -145,6 +146,7 @@ async function main(): Promise<void> {
     {
       dryRun: isDryRun,
       canaryOnly: env.CANARY_ONLY,
+      staggerWallets: env.STAGGER_WALLETS,
       quoteParams: {
         spreadTicks: env.SPREAD_TICKS,
         orderSizeUsd: env.ORDER_SIZE_USD,
@@ -156,6 +158,7 @@ async function main(): Promise<void> {
   // --- Risk monitor + kill switch ---
   const riskMonitor = new RiskMonitor(db, 500, async (reason) => {
     logger.warn({ reason }, 'risk: shutting down strategy')
+    tui?.stop()
     loop.stop()
     balancePoller.stop()
     if (isLive) {
@@ -190,10 +193,27 @@ async function main(): Promise<void> {
     'bot: running'
   )
 
+  // --- Terminal dashboard ---
+  let tui: Tui | null = null
+  if (env.TUI) {
+    tui = new Tui(db, LEGEND_TRADE_SERIES_MARKETS, {
+      mode: env.MODE,
+      dryRun: isDryRun,
+      live: isLive,
+      wallets: wallets.length,
+      markets: LEGEND_TRADE_SERIES_MARKETS.length,
+      spreadTicks: env.SPREAD_TICKS,
+      orderSizeUsd: env.ORDER_SIZE_USD,
+      maxPositionUsd: env.MAX_POSITION_USD_PER_MARKET,
+    })
+    tui.start(1000)
+  }
+
   // --- graceful shutdown ---
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'bot: shutting down')
     db.logEvent({ kind: 'SHUTDOWN', message: `signal=${signal}` })
+    tui?.stop()
     loop.stop()
     balancePoller.stop()
     riskMonitor.stop()

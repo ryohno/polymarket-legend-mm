@@ -48,6 +48,15 @@ const EnvSchema = z.object({
     .optional()
     .transform((v) => (v ? parseInt(v, 10) : 5000)),
   DASHBOARD_PORT: z.string().optional().default('3000'),
+  // UI / strategy flags
+  STAGGER_WALLETS: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  TUI: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
   // Collateral / exchange overrides passed through to shared/contracts.ts
   COLLATERAL_TOKEN_ADDRESS: z.string().optional(),
   COLLATERAL_TOKEN_SYMBOL: z.string().optional(),
