@@ -137,3 +137,7 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local runtime state (SQLite, encrypted keystores, logs, kill-switch)
+data/
+!data/.gitkeep

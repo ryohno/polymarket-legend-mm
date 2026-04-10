@@ -1,0 +1,23 @@
+{
+  "name": "@polymm/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@polymm/shared": "workspace:*",
+    "@polymarket/clob-client": "^5.8.1",
+    "better-sqlite3": "^11.5.0",
+    "dotenv": "^16.4.5",
+    "viem": "^2.46.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
