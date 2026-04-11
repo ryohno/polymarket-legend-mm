@@ -57,6 +57,10 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => v !== 'false'),
+  HEADLESS: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
   // Collateral / exchange overrides passed through to shared/contracts.ts
   COLLATERAL_TOKEN_ADDRESS: z.string().optional(),
   COLLATERAL_TOKEN_SYMBOL: z.string().optional(),

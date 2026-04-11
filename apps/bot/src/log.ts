@@ -16,6 +16,8 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const tuiOn = process.env.TUI !== 'false'
+const headless = process.env.HEADLESS === 'true'
+const writeToFile = tuiOn || headless
 const logFile = 'data/bot.log'
 
 // Make sure data/ exists before pino tries to open the file
@@ -44,7 +46,7 @@ const redact = {
   censor: '[REDACTED]',
 }
 
-export const logger = tuiOn
+export const logger = writeToFile
   ? pino(
       { level: process.env.LOG_LEVEL ?? 'info', redact },
       pino.destination({ dest: resolve(process.cwd(), logFile), sync: false })

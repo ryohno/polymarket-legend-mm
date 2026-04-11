@@ -66,6 +66,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@polymarket/clob-client':
+        specifier: ^5.8.1
+        version: 5.8.1(typescript@5.9.3)(zod@3.25.76)
       '@polymm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -81,6 +84,9 @@ importers:
       react-dom:
         specifier: ^19.0.0-rc-66855b96-20241106
         version: 19.2.5(react@19.2.5)
+      viem:
+        specifier: ^2.46.3
+        version: 2.47.12(typescript@5.9.3)(zod@3.25.76)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.0.0-beta.6

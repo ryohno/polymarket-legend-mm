@@ -195,7 +195,7 @@ async function main(): Promise<void> {
 
   // --- Terminal dashboard ---
   let tui: Tui | null = null
-  if (env.TUI) {
+  if (env.TUI && !env.HEADLESS) {
     tui = new Tui(db, LEGEND_TRADE_SERIES_MARKETS, {
       mode: env.MODE,
       dryRun: isDryRun,
