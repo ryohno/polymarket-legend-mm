@@ -242,22 +242,47 @@ export class StrategyLoop {
         feeRateBps: 0,
       })
       const resp = await wallet.clobClient.postOrder(signed, OrderType.GTC)
-      if (resp?.success === false) {
+
+      // Log every single post-order response so we can see what Polymarket is
+      // actually returning. The clob-client's postOrder response shape is any,
+      // so we must inspect dynamically.
+      logger.info(
+        { wallet: wallet.address, market: market.trader, side, price, resp },
+        'postOrder response'
+      )
+
+      // A real successful placement from Polymarket CLOB returns an object with
+      // BOTH a non-false `success` field AND a server-assigned `orderID` (or
+      // `orderId`). If either is missing, treat it as a failure.
+      const serverOrderId = (resp?.orderID ?? resp?.orderId) as string | undefined
+      const isSuccess =
+        resp != null &&
+        resp.success !== false &&
+        typeof serverOrderId === 'string' &&
+        serverOrderId.length > 0 &&
+        !serverOrderId.startsWith('proposed-')
+
+      if (!isSuccess) {
+        const errorMsg =
+          (resp?.errorMsg as string | undefined) ??
+          (resp?.error as string | undefined) ??
+          (resp == null ? 'null response' : 'no orderID in response')
         this.db.logEvent({
           kind: 'ORDER_REJECTED',
           level: 'warn',
           walletAddress: wallet.address,
           conditionId: market.conditionId,
-          message: `rejected: ${resp.errorMsg ?? 'unknown'}`,
-          payload: resp,
+          message: `rejected: ${errorMsg}`,
+          payload: resp ?? { note: 'null' },
         })
         this.db.upsertOrder({ ...record, status: 'REJECTED' })
         return
       }
-      const liveOrderId = (resp?.orderID as string | undefined) ?? orderId
+
+      // Real success — use the server-assigned order id
       this.db.upsertOrder({
         ...record,
-        orderId: liveOrderId,
+        orderId: serverOrderId,
         status: 'LIVE',
       })
       this.db.logEvent({
@@ -265,7 +290,7 @@ export class StrategyLoop {
         walletAddress: wallet.address,
         conditionId: market.conditionId,
         message: `${side} ${price} live`,
-        payload: { orderId: liveOrderId },
+        payload: { orderId: serverOrderId },
       })
     } catch (err) {
       logger.error({ err, wallet: wallet.address, market: market.trader }, 'order placement failed')

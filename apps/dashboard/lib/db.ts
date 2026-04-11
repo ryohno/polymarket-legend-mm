@@ -5,22 +5,38 @@
 
 import Database from 'better-sqlite3'
 import { DB_PATH_DEFAULT, findWorkspaceRoot } from '@polymm/shared'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-let db: Database.Database | null = null
+// We cache a handle keyed by inode so we never hand out a stale handle
+// pointing at a deleted file (Unix keeps the fd alive against the old
+// inode, causing read-only consumers to see pre-delete state forever).
+let cached: { db: Database.Database; ino: bigint } | null = null
 
 function dbPath(): string {
-  // Dashboard runs from apps/dashboard/; resolve DB path relative to workspace root.
   const root = findWorkspaceRoot()
   return root ? resolve(root, DB_PATH_DEFAULT) : DB_PATH_DEFAULT
 }
 
 export function getDb(): Database.Database | null {
-  if (db) return db
   const path = dbPath()
   if (!existsSync(path)) return null
-  db = new Database(path, { readonly: true, fileMustExist: true })
+  const stat = statSync(path)
+  const ino = stat.ino as unknown as bigint
+  if (cached && cached.ino === ino) {
+    return cached.db
+  }
+  // Path exists but inode changed (or first call) — close any old handle,
+  // open a fresh one.
+  if (cached) {
+    try {
+      cached.db.close()
+    } catch {
+      // ignore
+    }
+  }
+  const db = new Database(path, { readonly: true, fileMustExist: true })
+  cached = { db, ino }
   return db
 }
 
