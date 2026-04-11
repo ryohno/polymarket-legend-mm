@@ -1,24 +1,35 @@
 /**
- * Quote computation.
+ * Quote computation — top-of-book market making.
  *
- * Given a market's order book snapshot + strategy parameters, compute a
- * symmetric bid/ask quote around the mid, snapped to valid tick size.
+ * Strategy: land at the best bid / best ask of the Polymarket order book,
+ * improving by 1 tick when the spread allows it. This replaces the earlier
+ * mid-centred formula, which quoted outside the visible book when the real
+ * spread was ≤ 2 ticks (nearly always the case on these markets).
+ *
+ * Rules:
+ *   - Spread > 1 tick: improve by 1 tick on each side (become the new top)
+ *   - Spread == 1 tick: join the existing top (share queue with current best)
+ *   - Only one side present: join it, quote the other side 3 ticks away
+ *   - No book at all: fall back to the 0.125 fair-odds anchor
+ *
+ * We still guard against crossed quotes and refuse to emit bid >= ask.
  */
 
 import type { MarketDef, OrderBookSnapshot } from '@polymm/shared'
 import { snapPriceDown, snapPriceUp } from '@polymm/shared'
 
 export interface QuoteParams {
-  /** How many ticks off the mid on each side */
+  /**
+   * Legacy field retained for backwards compat, unused in top-of-book mode.
+   */
   spreadTicks: number
   /** Dollar size per side */
   orderSizeUsd: number
-  /** Fallback mid if the book is empty (e.g. fair odds = 1/8 = 0.125) */
+  /** Fallback mid if the book is completely empty */
   fallbackMid: number
   /**
-   * Extra tick offset this wallet adds to its spread (wallet tier).
-   * Wallet 0 quotes at the tightest level; wallet N quotes N ticks wider.
-   * Creates real book depth across wallets instead of 8x size at 1 level.
+   * Optional per-wallet tier offset in ticks. Wallet 0 gets 0 ticks (tightest);
+   * subsequent wallets step wider. Usually 0 when STAGGER_WALLETS=false.
    */
   walletTierOffset?: number
 }
@@ -34,9 +45,7 @@ export interface Quote {
 
 /**
  * Compute a two-sided quote for the YES token of a market.
- *
- * Returns null if the market is in a weird state (price at boundary, etc.)
- * and we should skip quoting this cycle.
+ * Returns null if the resulting quote would cross or be invalid.
  */
 export function computeYesQuote(params: {
   market: MarketDef
@@ -45,34 +54,54 @@ export function computeYesQuote(params: {
 }): Quote | null {
   const { market, snapshot, params: p } = params
   const tick = snapshot?.tickSize ?? market.tickSize
+  const EPS = tick / 2
 
-  // Determine mid
-  let mid: number
-  if (snapshot?.bestBid && snapshot?.bestAsk) {
-    mid = (snapshot.bestBid.price + snapshot.bestAsk.price) / 2
-  } else if (snapshot?.bestBid) {
-    mid = snapshot.bestBid.price + tick
-  } else if (snapshot?.bestAsk) {
-    mid = snapshot.bestAsk.price - tick
-  } else if (snapshot?.lastTradePrice != null) {
-    mid = snapshot.lastTradePrice
+  const bestBid = snapshot?.bestBid?.price ?? null
+  const bestAsk = snapshot?.bestAsk?.price ?? null
+  const tierOffset = tick * (p.walletTierOffset ?? 0)
+
+  let bidNum: number
+  let askNum: number
+
+  if (bestBid != null && bestAsk != null) {
+    const spread = bestAsk - bestBid
+    // Refuse to operate on a crossed or zero-width book (stale WS state)
+    if (spread <= EPS) return null
+
+    if (spread > tick + EPS) {
+      // Improve by 1 tick on both sides — become the new top of book
+      bidNum = bestBid + tick
+      askNum = bestAsk - tick
+    } else {
+      // Spread is exactly 1 tick, can't improve without crossing — join the top
+      bidNum = bestBid
+      askNum = bestAsk
+    }
+  } else if (bestBid != null) {
+    // Only bids visible — join best bid, quote 3 ticks above as ask
+    bidNum = bestBid
+    askNum = bestBid + 3 * tick
+  } else if (bestAsk != null) {
+    // Only asks visible — join best ask, quote 3 ticks below as bid
+    askNum = bestAsk
+    bidNum = bestAsk - 3 * tick
   } else {
-    mid = p.fallbackMid
+    // Empty book — anchor to fair odds
+    bidNum = p.fallbackMid - tick
+    askNum = p.fallbackMid + tick
   }
 
-  // Clamp mid to valid range
-  mid = Math.max(tick * 2, Math.min(1 - tick * 2, mid))
+  // Apply wallet tier (widens both sides by N ticks). Default 0.
+  bidNum -= tierOffset
+  askNum += tierOffset
 
-  const tierOffset = tick * (p.walletTierOffset ?? 0)
-  const bidPrice = snapPriceDown(mid - tick * p.spreadTicks - tierOffset, tick)
-  const askPrice = snapPriceUp(mid + tick * p.spreadTicks + tierOffset, tick)
+  // Snap to tick and clamp away from 0/1 boundaries
+  const bidPrice = snapPriceDown(bidNum, tick)
+  const askPrice = snapPriceUp(askNum, tick)
 
-  // Refuse to quote if the result is crossed or equals mid-exactly
+  // Final guard
   if (parseFloat(bidPrice) >= parseFloat(askPrice)) return null
 
-  // Size: USD for BUY, shares for SELL.
-  // For a SELL at price `askPrice`, N shares of YES yields N * askPrice USD when filled.
-  // To target orderSizeUsd notional: shares = orderSizeUsd / askPrice.
   const bidSizeUsd = p.orderSizeUsd
   const askSizeShares = p.orderSizeUsd / parseFloat(askPrice)
 
