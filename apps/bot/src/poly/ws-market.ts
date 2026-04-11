@@ -18,7 +18,20 @@ import type { OrderBookSnapshot } from '@polymm/shared'
 import type { TickSizeCache } from './tick.js'
 import { logger } from '../log.js'
 
-type BookSide = 'bid' | 'ask'
+/**
+ * Polymarket's WS protocol is inconsistent on side labels:
+ *   - book snapshot: separate `bids` and `asks` arrays (no side field)
+ *   - price_change event: per-change `side: "BUY" | "SELL"` (uppercase)
+ *   - docs occasionally refer to `"bid" | "ask"` (lowercase)
+ *
+ * We accept all four so the parser is robust.
+ */
+type BookSide = 'bid' | 'ask' | 'BUY' | 'SELL' | 'buy' | 'sell'
+
+function isBuySide(side: string): boolean {
+  const u = side.toUpperCase()
+  return u === 'BUY' || u === 'BID'
+}
 
 interface RawBookLevel {
   price: string
@@ -187,7 +200,8 @@ export class MarketDataWs {
             lastTrade: null,
           }
           const sizeNum = parseFloat(change.size)
-          const target = change.side === 'bid' ? book.bids : book.asks
+          // Polymarket uses "BUY"/"SELL" here, not "bid"/"ask" like docs suggest
+          const target = isBuySide(change.side) ? book.bids : book.asks
           if (sizeNum === 0) target.delete(change.price)
           else target.set(change.price, sizeNum)
           this.books.set(change.asset_id, book)
