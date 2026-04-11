@@ -1,0 +1,33 @@
+[Unit]
+Description=polymarket-legend-mm bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polymm
+Group=polymm
+WorkingDirectory=/home/polymm/polymarket-legend-mm
+ExecStart=/home/polymm/.local/share/pnpm/pnpm --filter @polymm/bot exec tsx src/index.ts
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/home/polymm/polymarket-legend-mm/data/systemd.log
+StandardError=append:/home/polymm/polymarket-legend-mm/data/systemd.log
+Environment="HEADLESS=true"
+Environment="TUI=false"
+Environment="NODE_ENV=production"
+Environment="PATH=/home/polymm/.local/share/pnpm:/home/polymm/.nvm/versions/node/v20/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/polymm/polymarket-legend-mm/data
+
+# Limits
+MemoryMax=1G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

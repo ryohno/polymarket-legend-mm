@@ -1,0 +1,34 @@
+[Unit]
+Description=polymarket-legend-mm dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polymm
+Group=polymm
+WorkingDirectory=/home/polymm/polymarket-legend-mm
+ExecStart=/home/polymm/.local/share/pnpm/pnpm --filter @polymm/dashboard exec next dev --port 3000
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/home/polymm/polymarket-legend-mm/data/dashboard.log
+StandardError=append:/home/polymm/polymarket-legend-mm/data/dashboard.log
+Environment="NODE_ENV=development"
+Environment="PATH=/home/polymm/.local/share/pnpm:/home/polymm/.nvm/versions/node/v20/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Bind to localhost only — never expose publicly. Access via SSH tunnel.
+Environment="HOST=127.0.0.1"
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/polymm/polymarket-legend-mm/data /home/polymm/polymarket-legend-mm/apps/dashboard/.next
+
+# Limits
+MemoryMax=1G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
