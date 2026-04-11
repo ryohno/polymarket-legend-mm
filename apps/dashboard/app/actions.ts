@@ -80,6 +80,13 @@ export async function generateTreasuryAction(): Promise<ScriptResult> {
   return result
 }
 
+export async function activateUsdcAction(): Promise<ScriptResult> {
+  // Swap native USDC → USDC.e on the treasury via Uniswap V3 0.01% pool
+  const result = await runScript('activate:usdc', ['--', '--yes'])
+  revalidatePath('/setup')
+  return result
+}
+
 export async function generateWalletsAction(count = 8): Promise<ScriptResult> {
   const result = await runScript('wallets:generate', ['--count', String(count)])
   revalidatePath('/setup')

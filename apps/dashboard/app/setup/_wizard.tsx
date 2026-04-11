@@ -8,6 +8,7 @@ import {
   fundWalletsAction,
   grantApprovalsAction,
   sweepWalletsAction,
+  activateUsdcAction,
 } from '../actions'
 
 function StepCard({
@@ -181,18 +182,73 @@ export function SetupWizard({ status }: { status: SetupStatus }) {
             </li>
             <li>Click Withdraw</li>
             <li>
-              Send your MM capital (USDC.e) to the treasury address above on <b>Polygon</b>
+              Send your MM capital to the treasury address above on <b>Polygon</b>
             </li>
             <li>
               Send ~0.2 MATIC to the same address from any exchange (gas for distribution)
             </li>
             <li>Wait a few seconds and this page will refresh automatically</li>
           </ol>
-          {status.treasuryUsdc != null && status.treasuryUsdc < 1 && (
-            <p className="text-xs text-muted-2 mt-3">
-              Waiting for treasury to receive funds… currently{' '}
-              <span className="text-fg num">${status.treasuryUsdc.toFixed(2)}</span>
-            </p>
+
+          <div className="mt-4 p-3 bg-background rounded-md">
+            <div className="text-xs text-muted-2 mb-2 uppercase tracking-wide">
+              Current treasury balances
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-sm num">
+              <div>
+                <div className="text-xs text-muted-2">USDC.e (bridged)</div>
+                <div
+                  className={`font-bold ${(status.treasuryUsdc ?? 0) > 0 ? 'text-confirm' : 'text-muted'}`}
+                >
+                  ${(status.treasuryUsdc ?? 0).toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-2">USDC (native)</div>
+                <div
+                  className={`font-bold ${(status.treasuryUsdcNative ?? 0) > 0 ? 'text-gold' : 'text-muted'}`}
+                >
+                  ${(status.treasuryUsdcNative ?? 0).toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-2">MATIC</div>
+                <div
+                  className={`font-bold ${(status.treasuryMatic ?? 0) > 0 ? 'text-fg' : 'text-muted'}`}
+                >
+                  {(status.treasuryMatic ?? 0).toFixed(3)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* USDC activation alert + action */}
+          {status.needsUsdcActivation && (
+            <div className="mt-4 p-3 bg-background border border-gold-dim rounded-md">
+              <div className="text-sm font-bold text-gold mb-1">
+                ⚠ Native USDC detected — needs activation
+              </div>
+              <p className="text-xs text-muted-3 mb-3">
+                Polymarket's withdraw flow now gives you native Circle USDC, but the markets
+                settle in bridged <span className="font-mono">USDC.e</span>. Click below to
+                swap the full balance via Uniswap V3's 0.01% fee pool
+                (&lt;10bp slippage, ~30s). Same flow as Polymarket's "Activate Funds" button.
+              </p>
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  run('activate', async () => {
+                    const r = await activateUsdcAction()
+                    return { output: r.output, error: r.error }
+                  })
+                }
+              >
+                {runningStep === 'activate'
+                  ? 'Swapping…'
+                  : `Activate $${(status.treasuryUsdcNative ?? 0).toFixed(2)} USDC → USDC.e`}
+              </Button>
+              {outputs.activate && <OutputBox {...outputs.activate} />}
+            </div>
           )}
         </div>
       )}

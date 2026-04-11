@@ -6,6 +6,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "treasury:generate": "tsx src/generate-treasury.ts",
+    "treasury:probe": "tsx src/probe-treasury.ts",
+    "treasury:export-keys": "tsx src/export-keys.ts",
+    "activate:usdc": "tsx src/activate-usdc.ts",
     "wallets:generate": "tsx src/generate-wallets.ts",
     "wallets:fund": "tsx src/fund-wallets.ts",
     "wallets:approve": "tsx src/grant-approvals.ts",

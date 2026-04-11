@@ -32,7 +32,12 @@ export interface SetupStatus {
   walletsReady: boolean
   walletAddresses: string[]
   fundingReady: boolean
+  /** USDC.e balance on the treasury (the token the bot trades in) */
   treasuryUsdc: number | null
+  /** Native Circle USDC balance — Polymarket's stablecoin rollout gives you this on withdraw */
+  treasuryUsdcNative: number | null
+  /** Whether the treasury needs a native USDC → USDC.e swap before funding MM wallets */
+  needsUsdcActivation: boolean
   treasuryMatic: number | null
   walletFunding: Array<{ label: string; address: string; usdc: number; matic: number }>
   approvalsReady: boolean
@@ -140,6 +145,8 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     walletAddresses: wallets.map((w) => w.address),
     fundingReady: false,
     treasuryUsdc: null,
+    treasuryUsdcNative: null,
+    needsUsdcActivation: false,
     treasuryMatic: null,
     walletFunding: [],
     approvalsReady: false,
@@ -161,21 +168,32 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 
   const contracts = getContractConfig(137)
   const collateral = getAddress(contracts.collateral)
+  const USDC_NATIVE = getAddress('0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359')
 
   // Check treasury balance
   if (treasuryAddress) {
     try {
-      const [usdc, matic] = await Promise.all([
+      const [usdcE, usdcNative, matic] = await Promise.all([
         publicClient.readContract({
           address: collateral,
           abi: ERC20_ABI,
           functionName: 'balanceOf',
           args: [getAddress(treasuryAddress) as Address],
         }),
+        publicClient.readContract({
+          address: USDC_NATIVE,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [getAddress(treasuryAddress) as Address],
+        }),
         publicClient.getBalance({ address: getAddress(treasuryAddress) as Address }),
       ])
-      status.treasuryUsdc = Number(usdc) / 1e6
+      status.treasuryUsdc = Number(usdcE) / 1e6
+      status.treasuryUsdcNative = Number(usdcNative) / 1e6
       status.treasuryMatic = Number(matic) / 1e18
+      // Needs activation if there's native USDC but no USDC.e (or much less of it)
+      status.needsUsdcActivation =
+        status.treasuryUsdcNative > 0.5 && status.treasuryUsdc < 1
     } catch {
       // ignore
     }
